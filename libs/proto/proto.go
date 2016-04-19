@@ -123,7 +123,7 @@ func (p *Proto) WriteTCP(wr *bufio.Writer) (err error) {
 		packLen int32
 	)
 	if p.Operation == define.OP_RAW {
-		log.Info("OP_RAW pre tcp write:", string(p.Body), p, p.Body)
+		log.Debug("OP_RAW pre tcp write:", string(p.Body), p, p.Body, len(p.Body))
 		_, err = wr.Write(p.Body)
 		return
 	}
@@ -148,31 +148,38 @@ func (p *Proto) ReadWebsocket(wr *websocket.Conn) (err error) {
 	return
 }
 
-func (p *Proto) WriteWebsocket(wr *websocket.Conn, pro *Proto) (err error) {
+func (p *Proto) WriteWebsocket(wr *websocket.Conn, ap *Proto) (err error) {
 	if p.Body == nil {
 		p.Body = emptyJSONBody
 	}
 	// TODO
 	if (p.Operation == define.OP_RAW) {
-		log.Info("RAW operation in writewebsocket", p, p.Operation, p.Body)
-		// Body里实际是一个Proto结构的数据，在RAW的情况时
-		// 把p.Body里的提出来重新构造一个Proto， 然后发送
-		//pro := new(Proto)
-		buf := p.Body
-		packLen := binary.BigEndian.Int32(buf[PackOffset:HeaderOffset])
-		pro.HeaderLen = binary.BigEndian.Int16(buf[HeaderOffset:VerOffset])
-		pro.Ver = binary.BigEndian.Int16(buf[VerOffset:OperationOffset])
-		pro.Operation = binary.BigEndian.Int32(buf[OperationOffset:SeqIdOffset])
-		pro.SeqId = binary.BigEndian.Int32(buf[SeqIdOffset:RawHeaderSize])
-		pro.Body = buf[RawHeaderSize:]
-		log.Info("Proto pack to send:", pro, packLen, pro.HeaderLen, RawHeaderSize)
-		if packLen > MaxPackSize {
-			return ErrProtoPackLen
+		singlePackOffset := int32(PackOffset)
+		buf := p.Body[:]
+		// maybe the proto body contain multi proto pack, need split it for websocket sender
+		for {
+			if (len(buf[singlePackOffset:])) < 1 {
+				break
+			}
+			packLen := binary.BigEndian.Int32(buf[singlePackOffset:singlePackOffset+HeaderOffset])
+			packBuf := buf[singlePackOffset:singlePackOffset+packLen]
+
+			ap.HeaderLen = binary.BigEndian.Int16(packBuf[HeaderOffset:VerOffset])
+			ap.Ver = binary.BigEndian.Int16(packBuf[VerOffset:OperationOffset])
+			ap.Operation = binary.BigEndian.Int32(packBuf[OperationOffset:SeqIdOffset])
+			ap.SeqId = binary.BigEndian.Int32(packBuf[SeqIdOffset:RawHeaderSize])
+			ap.Body = packBuf[RawHeaderSize:]
+
+			log.Debug("Proto pack to send:", ap, packLen, ap.HeaderLen, RawHeaderSize)
+			if packLen > MaxPackSize {
+				return ErrProtoPackLen
+			}
+			if ap.HeaderLen != RawHeaderSize {
+				return ErrProtoHeaderLen
+			}
+			err = websocket.JSON.Send(wr, ap)
+			singlePackOffset += packLen
 		}
-		if pro.HeaderLen != RawHeaderSize {
-			return ErrProtoHeaderLen
-		}
-		err = websocket.JSON.Send(wr, pro)
 	} else {
 		err = websocket.JSON.Send(wr, p)
 	}
