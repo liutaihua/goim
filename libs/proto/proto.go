@@ -10,6 +10,7 @@ import (
 	"goim/libs/encoding/binary"
 
 	"golang.org/x/net/websocket"
+	log "github.com/thinkboy/log4go"
 )
 
 // for tcp
@@ -122,6 +123,7 @@ func (p *Proto) WriteTCP(wr *bufio.Writer) (err error) {
 		packLen int32
 	)
 	if p.Operation == define.OP_RAW {
+		log.Info("OP_RAW pre tcp write:", string(p.Body), p, p.Body)
 		_, err = wr.Write(p.Body)
 		return
 	}
@@ -146,11 +148,33 @@ func (p *Proto) ReadWebsocket(wr *websocket.Conn) (err error) {
 	return
 }
 
-func (p *Proto) WriteWebsocket(wr *websocket.Conn) (err error) {
+func (p *Proto) WriteWebsocket(wr *websocket.Conn, pro *Proto) (err error) {
 	if p.Body == nil {
 		p.Body = emptyJSONBody
 	}
 	// TODO
-	err = websocket.JSON.Send(wr, p)
+	if (p.Operation == define.OP_RAW) {
+		log.Info("RAW operation in writewebsocket", p, p.Operation, p.Body)
+		// Body里实际是一个Proto结构的数据，在RAW的情况时
+		// 把p.Body里的提出来重新构造一个Proto， 然后发送
+		//pro := new(Proto)
+		buf := p.Body
+		packLen := binary.BigEndian.Int32(buf[PackOffset:HeaderOffset])
+		pro.HeaderLen = binary.BigEndian.Int16(buf[HeaderOffset:VerOffset])
+		pro.Ver = binary.BigEndian.Int16(buf[VerOffset:OperationOffset])
+		pro.Operation = binary.BigEndian.Int32(buf[OperationOffset:SeqIdOffset])
+		pro.SeqId = binary.BigEndian.Int32(buf[SeqIdOffset:RawHeaderSize])
+		pro.Body = buf[RawHeaderSize:]
+		log.Info("Proto pack to send:", pro, packLen, pro.HeaderLen, RawHeaderSize)
+		if packLen > MaxPackSize {
+			return ErrProtoPackLen
+		}
+		if pro.HeaderLen != RawHeaderSize {
+			return ErrProtoHeaderLen
+		}
+		err = websocket.JSON.Send(wr, pro)
+	} else {
+		err = websocket.JSON.Send(wr, p)
+	}
 	return
 }

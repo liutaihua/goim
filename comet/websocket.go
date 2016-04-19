@@ -168,6 +168,9 @@ func (server *Server) dispatchWebsocket(key string, conn *websocket.Conn, ch *Ch
 	}
 	for {
 		p = ch.Ready()
+		if Debug {
+			log.Debug("key:%s dispatch websocket msg:%v", key, *p)
+		}
 		switch p {
 		case proto.ProtoFinish:
 			if Debug {
@@ -180,7 +183,7 @@ func (server *Server) dispatchWebsocket(key string, conn *websocket.Conn, ch *Ch
 					err = nil // must be empty error
 					break
 				}
-				if err = p.WriteWebsocket(conn); err != nil {
+				if err = p.WriteWebsocket(conn, nil); err != nil {
 					goto failed
 				}
 				p.Body = nil // avoid memory leak
@@ -189,7 +192,15 @@ func (server *Server) dispatchWebsocket(key string, conn *websocket.Conn, ch *Ch
 		default:
 			// TODO room-push support
 			// just forward the message
-			if err = p.WriteWebsocket(conn); err != nil {
+			log.Info(p)
+			var p2 *proto.Proto
+			ch.CliProto.GetAdv()
+			if p2, err = ch.CliProto.Get(); err != nil {
+				log.Error("error==============", err, p2)
+				err = nil // must be empty error
+				break
+			}
+			if err = p.WriteWebsocket(conn, p2); err != nil {
 				goto failed
 			}
 			p.Body = nil // avoid memory leak
@@ -226,6 +237,6 @@ func (server *Server) authWebsocket(conn *websocket.Conn, p *proto.Proto) (key s
 	}
 	p.Body = nil
 	p.Operation = define.OP_AUTH_REPLY
-	err = p.WriteWebsocket(conn)
+	err = p.WriteWebsocket(conn, nil)
 	return
 }
