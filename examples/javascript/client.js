@@ -16,23 +16,23 @@
         var heartbeatInterval;
 
         function connect() {
-            var ws = new WebSocket('ws://localhost:8090/sub');
-            var auth = false;
+            var ws = new WebSocket('ws://localhost:8090/sub?room_id=1&token=abc');
+            var auth = true;
 
             ws.onopen = function() {
-                getAuth();
+                //getAuth();
             }
 
             ws.onmessage = function(evt) {
                 var data = JSON.parse(evt.data);
-                if (data.op == 8) {
-                    auth = true;
-                    heartbeat();
-                    heartbeatInterval = setInterval(heartbeat, 4 * 60 * 1000);
-                }
-                if (!auth) {
-                    setTimeout(getAuth, delay);
-                }
+//                if (data.op == 8) {
+//                    auth = true;
+//                    heartbeat();
+//                    heartbeatInterval = setInterval(heartbeat, 4 * 60 * 1000);
+//                }
+//                if (!auth) {
+//                    setTimeout(getAuth, delay);
+//                }
                 if (auth && data.op == 5) {
                     var notify = self.options.notify;
                     if(notify) notify(data.body);

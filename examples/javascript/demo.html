@@ -4,14 +4,17 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>client demo</title>
+    <script src="http://video_conference.corp.plu.cn/Scripts/jquery-2.0.1.js"></script>
   </head>
   <body>
     <h1>client demo</h1>
+    <input type="text" id="userId" value="10000">
+    <button onclick="client.createConnect(10,15000)">connection</button>
     <script src="client.js"></script>
     <script>
       var client = new MyClient({
         notify: function(data) {
-          alert(data);
+          console.log(JSON.stringify(data));
         }
       });
     </script>
